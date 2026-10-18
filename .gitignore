@@ -9,4 +9,8 @@ race_cache/cache/
 
 # Local race data (fetched on-demand, not part of source)
 race_cache/
+race_seed/
 race_data.json
+
+# Strategy-model dataset and raw OpenF1 cache (rebuilt by ml/build_dataset.py)
+ml/data/

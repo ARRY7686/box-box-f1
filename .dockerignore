@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 cache/
 race_cache/
+race_seed/
 race_data.json
 *.jsonl
+ml/data/

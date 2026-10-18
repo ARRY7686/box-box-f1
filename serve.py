@@ -3,6 +3,7 @@
 F1 Simulator server with race-selection API.
 Usage:  python serve.py
 """
+import gzip
 import http.server
 import socketserver
 import threading
@@ -12,9 +13,12 @@ import json
 import urllib.parse
 from pathlib import Path
 
+from fetch_data import race_filename
+
 PORT     = int(os.environ.get("PORT", 7860))
 BASE     = Path(__file__).parent
 RCACHE   = BASE / "race_cache"   # processed race JSON files
+SEED     = BASE / "race_seed"    # showcase races baked into the image (precache.py)
 
 RCACHE.mkdir(exist_ok=True)
 os.chdir(BASE)
@@ -26,13 +30,18 @@ _SCHED_LOCK  = threading.Lock()
 _SESSIONS    = ('R', 'Q', 'S', 'FP1', 'FP2', 'FP3')
 
 
-def _slug(s: str) -> str:
-    """URL/filename-safe lowercase slug."""
-    return s.lower().replace(' ', '_').replace('/', '_').replace("'", '')
-
-
 def race_file(year, gp, session) -> Path:
-    return RCACHE / f"{year}_{_slug(gp)}_{session.lower()}.json"
+    """Where a newly fetched session is written."""
+    return RCACHE / race_filename(year, gp, session)
+
+
+def find_race(year, gp, session):
+    """Processed JSON for a session from race_cache/ or race_seed/, or None."""
+    for d in (RCACHE, SEED):
+        f = d / race_filename(year, gp, session)
+        if f.exists():
+            return f
+    return None
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -61,12 +70,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if year not in _SCHED_CACHE:
                     _SCHED_CACHE[year] = get_schedule(year)
                 base = _SCHED_CACHE[year]
-            # Annotate which sessions are already in race_cache/ (no API call)
+            # Annotate which sessions are already downloaded (no API call)
             events = []
             for ev in base:
                 cached_sessions = [
                     s for s in _SESSIONS
-                    if race_file(year, ev['name'], s).exists()
+                    if find_race(year, ev['name'], s)
                 ]
                 events.append({**ev, 'cached_sessions': cached_sessions})
             self._json(events)
@@ -78,7 +87,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         year    = q.get('year',    ['2024'])[0]
         gp      = q.get('gp',     [''])[0]
         session = q.get('session', ['R'])[0]
-        self._json({'cached': race_file(year, gp, session).exists()})
+        self._json({'cached': find_race(year, gp, session) is not None})
 
     # ── GET /api/fetch?year=&gp=&session=  (Server-Sent Events) ─────────────
     def _fetch_sse(self, q):
@@ -122,13 +131,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         year    = q.get('year',    ['2024'])[0]
         gp      = q.get('gp',     [''])[0]
         session = q.get('session', ['R'])[0]
-        f = race_file(year, gp, session)
-        if not f.exists():
+        f = find_race(year, gp, session)
+        if f is None:
             self.send_error(404, 'Race data not cached')
             return
-        data = f.read_bytes()
+        # Race JSON gzips to ~40% of its size; keep a gzipped copy next to it
+        use_gz = 'gzip' in self.headers.get('Accept-Encoding', '')
+        if use_gz:
+            gz = f.with_name(f.name + '.gz')
+            fresh = gz.exists() and gz.stat().st_mtime >= f.stat().st_mtime
+            if not fresh:
+                tmp = gz.with_name(f'{gz.name}.{threading.get_ident()}.tmp')
+                try:
+                    tmp.write_bytes(gzip.compress(f.read_bytes(), 6))
+                    os.replace(tmp, gz)
+                    fresh = True
+                except OSError:
+                    pass   # read-only folder: compress in memory instead
+            data = gz.read_bytes() if fresh else gzip.compress(f.read_bytes(), 6)
+        else:
+            data = f.read_bytes()
         self.send_response(200)
         self.send_header('Content-Type',   'application/json')
+        if use_gz:
+            self.send_header('Content-Encoding', 'gzip')
         self.send_header('Content-Length', str(len(data)))
         self.end_headers()
         self.wfile.write(data)

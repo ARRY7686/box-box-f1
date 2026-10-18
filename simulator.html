@@ -327,6 +327,10 @@ body {
   white-space: nowrap;
   animation: ot-in 5s ease-out forwards;
 }
+.radio-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  margin-right: 8px; vertical-align: 1px;
+}
 @keyframes ot-in {
   0%   { opacity:0; transform:translateY(4px); }
   10%  { opacity:1; transform:translateY(0); }
@@ -384,9 +388,12 @@ body {
 #minimap.on { display: block; }
 
 /* ── Strategy toggle button ─────────────────────────────────────────── */
-#strat-btn {
+#tool-btns {
   position: fixed;
   bottom: 26px; left: 16px;
+  display: flex; gap: 6px;
+}
+#strat-btn, #radio-btn {
   padding: 5px 14px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
@@ -396,8 +403,8 @@ body {
   cursor: pointer; pointer-events: all;
   transition: color .15s, background .15s;
 }
-#strat-btn:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.07); }
-#strat-btn.on { color: white; background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+#strat-btn:hover, #radio-btn:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.07); }
+#strat-btn.on, #radio-btn.on { color: white; background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
 
 /* ── Strategy strip (inside standings column when toggled) ──────────── */
 .strat-strip {
@@ -707,7 +714,10 @@ body {
     <div class="tleg"><span class="tleg-dot" style="background:#0067FF"></span>WET</div>
   </div>
 
-  <div id="strat-btn" role="button">Strategy</div>
+  <div id="tool-btns">
+    <div id="strat-btn" role="button">Strategy</div>
+    <div id="radio-btn" role="button" class="on">Radio</div>
+  </div>
   <div id="help-btn" role="button">?</div>
   <div id="controls">
     <div id="timeline-bar">
@@ -771,6 +781,7 @@ body {
       <div class="help-section-title">Strategy Strip</div>
       <div class="help-row"><span class="help-key">S key</span>Toggle the strategy strip on / off for all drivers</div>
       <div class="help-row"><span class="help-key">H key</span>Open / close this help panel</div>
+      <div class="help-row"><span class="help-key">R key</span>Turn team radio on / off (plays at 1× and 5×; only the followed driver's radio while following)</div>
       <div class="help-row"><span class="help-key">Colours</span><span style="display:inline-flex;gap:4px;margin-left:4px">
         <span style="width:22px;height:8px;background:#E8002D;border-radius:2px"></span>
         <span style="width:22px;height:8px;background:#FFC906;border-radius:2px"></span>
@@ -1285,6 +1296,55 @@ function pushOtLog(gainer,loser,pos) {
   while(log.children.length>3) log.removeChild(log.lastChild);
 }
 
+// ── Team radio ───────────────────────────────────────────────────────────────
+// Clips play at 1x and 5x only: at higher speeds one clip spans minutes of race.
+const RADIO_MAX_SPEED = 5;
+const radioAudio = new Audio();
+let radioOn  = true;
+let radioIdx = 0;       // next clip in raceData.radio to trigger
+let radioNow = null;    // driver number whose clip is playing
+
+radioAudio.addEventListener('ended', () => { radioNow = null; });
+radioAudio.addEventListener('error', () => { radioNow = null; });
+
+function stopRadio() { radioAudio.pause(); radioNow = null; }
+
+function resetRadio() {
+  stopRadio();
+  const r = raceData?.radio || [];
+  let lo = 0, hi = r.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (r[m][0] < simTime) lo = m + 1; else hi = m; }
+  radioIdx = lo;
+}
+
+function checkRadio() {
+  const r = raceData.radio;
+  if (!r) return;
+  while (radioIdx < r.length && r[radioIdx][0] <= simTime) {
+    const [, num, url] = r[radioIdx++];
+    const drv = raceData.drivers[num];
+    if (!drv || !radioOn || simSpeed > RADIO_MAX_SPEED) continue;
+    pushRadioLog(drv);
+    if (cam.follow && cam.follow !== num) continue;
+    radioAudio.src = url;
+    radioNow = num;
+    radioAudio.play().catch(() => { if (radioNow === num) radioNow = null; });
+  }
+}
+
+function pushRadioLog(drv) {
+  const log = document.getElementById('ot-log');
+  const el = document.createElement('div');
+  el.className = 'ot-entry';
+  const dot = document.createElement('span');
+  dot.className = 'radio-dot';
+  dot.style.background = drv.color;
+  el.append(dot, `${drv.name}  ·  TEAM RADIO`);
+  log.prepend(el);
+  setTimeout(() => el.remove(), 5300);
+  while (log.children.length > 3) log.removeChild(log.lastChild);
+}
+
 // ── Draw Track ───────────────────────────────────────────────────────────────
 function drawTrack() {
   if (!trackP2D) return;
@@ -1397,6 +1457,14 @@ function drawCars(entries, nowTs) {
       ctx.fillStyle='rgba(255,255,255,0.72)';
       ctx.textBaseline='bottom'; ctx.fillText(e.drv.name,sx,sy-11);
     }
+    if (radioNow === e.num) {
+      const pulse = 0.5 + 0.5 * Math.sin(nowTs / 110);
+      ctx.beginPath(); ctx.arc(sx, sy, 14 + pulse * 5, 0, Math.PI * 2);
+      ctx.strokeStyle = e.drv.color; ctx.globalAlpha = 0.35 + 0.45 * pulse;
+      ctx.lineWidth = 1.5; ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.font = '700 7px -apple-system,sans-serif'; ctx.fillStyle = e.drv.color;
+      ctx.textBaseline = 'top'; ctx.fillText('RADIO', sx, sy + (cam.follow === e.num ? 26 : 12));
+    }
     if(cam.follow===e.num){
       ctx.font='600 9px -apple-system,sans-serif';
       ctx.fillStyle='rgba(255,255,255,0.38)';
@@ -1454,6 +1522,7 @@ function frame(ts) {
   }
 
   checkOvertakes(entries,ts);
+  checkRadio();
   updateHUD(entries);
 }
 
@@ -1685,14 +1754,23 @@ document.getElementById('play-btn').addEventListener('click',()=>{
   playing=!playing;
   document.getElementById('play-btn').textContent=playing?'⏸':'▶';
   if(playing) lastTs=null;
+  if(!playing) radioAudio.pause();
+  else if(radioNow) radioAudio.play().catch(()=>{});
 });
 
 document.querySelectorAll('.spd').forEach(el=>{
   el.addEventListener('click',()=>{
     simSpeed=+el.dataset.v;
+    if(simSpeed>RADIO_MAX_SPEED) stopRadio();
     document.querySelectorAll('.spd').forEach(e=>e.classList.remove('on'));
     el.classList.add('on');
   });
+});
+
+document.getElementById('radio-btn').addEventListener('click', () => {
+  radioOn = !radioOn;
+  document.getElementById('radio-btn').classList.toggle('on', radioOn);
+  if (!radioOn) stopRadio();
 });
 
 document.getElementById('strat-btn').addEventListener('click', () => {
@@ -1704,8 +1782,8 @@ document.getElementById('strat-btn').addEventListener('click', () => {
 window.addEventListener('keydown',e=>{
   if(!raceData) return;
   if(e.code==='Space'){e.preventDefault();document.getElementById('play-btn').click();}
-  else if(e.code==='ArrowRight'){simTime=Math.min(raceData.t_end,simTime+30*simSpeed);resetOvertakes();}
-  else if(e.code==='ArrowLeft') {simTime=Math.max(raceData.t_start,simTime-30*simSpeed);resetOvertakes();}
+  else if(e.code==='ArrowRight'){simTime=Math.min(raceData.t_end,simTime+30*simSpeed);resetOvertakes(); resetRadio();}
+  else if(e.code==='ArrowLeft') {simTime=Math.max(raceData.t_start,simTime-30*simSpeed);resetOvertakes(); resetRadio();}
   else if(e.code==='Escape') {
     if(document.getElementById('help').classList.contains('on'))
       closeHelp();
@@ -1715,6 +1793,7 @@ window.addEventListener('keydown',e=>{
   }
   else if(e.key>='1'&&e.key<='5') document.querySelectorAll('.spd')[+e.key-1]?.click();
   else if(e.code==='KeyS') document.getElementById('strat-btn').click();
+  else if(e.code==='KeyR') document.getElementById('radio-btn').click();
   else if(e.code==='KeyH') document.getElementById('help-btn').click();
 });
 
@@ -1725,7 +1804,7 @@ function doScrub(e){
   const r=scrubber.getBoundingClientRect();
   const p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
   simTime=raceData.t_start+p*(raceData.t_end-raceData.t_start);
-  resetOvertakes();
+  resetOvertakes(); resetRadio();
 }
 scrubber.addEventListener('mousedown',e=>{scrubbing=true;doScrub(e);});
 window.addEventListener('mousemove',e=>{if(scrubbing)doScrub(e);});
@@ -1740,7 +1819,7 @@ function initData(d) {
   buildTrackPath();
   buildMiniMap();
   initCamera();
-  resetOvertakes();
+  resetOvertakes(); resetRadio();
   _flCache=null; _flCacheT=-1;
   const SL={R:'Race',Q:'Qualifying',S:'Sprint',FP1:'Practice 1',FP2:'Practice 2',FP3:'Practice 3'};
   document.getElementById('race-title').textContent=

@@ -82,7 +82,13 @@ def _ts(s: str) -> float:
 
 
 def _slug(s: str) -> str:
-    return s.lower().replace(" ", "_").replace("/", "_").replace("'", "")
+    return (s.lower().replace(" ", "_").replace("/", "_").replace("\\", "_")
+            .replace("'", ""))
+
+
+def race_filename(year, grand_prix: str, session_type: str) -> str:
+    """Name of the processed JSON for a session (race_cache/ and race_seed/)."""
+    return f"{year}_{_slug(grand_prix)}_{session_type.lower()}.json"
 
 
 def hex_color(team_color):
@@ -193,6 +199,29 @@ def _lap_windows(laps: list, raw_t, raw_x, raw_y):
     return windows
 
 
+def _pit_lane_from_stops(pit_stops: list, raw: dict) -> list | None:
+    """Pit-lane path traced by a car through a typical timed stop."""
+    stops = []
+    for p in pit_stops:
+        dur = p.get("lane_duration") or p.get("pit_duration")
+        if p.get("date") and dur and 15 <= dur <= 60 and p["driver_number"] in raw:
+            stops.append((dur, p["driver_number"], _ts(p["date"])))
+    if not stops:
+        return None
+    stops.sort()
+    dur, num, t_out = stops[len(stops) // 2]
+    t, x, y = raw[num]
+    m = (t >= t_out - dur) & (t <= t_out)
+    if m.sum() < 10:
+        return None
+    return [[round(float(a), 1), round(float(b), 1)] for a, b in zip(x[m], y[m])]
+
+
+def _max_jump(pts) -> float:
+    a = np.asarray(pts, dtype=np.float64)
+    return float(np.hypot(*np.diff(a, axis=0).T).max()) if len(a) > 1 else 0.0
+
+
 def _in_windows(t, windows):
     keep = np.zeros(len(t), dtype=bool)
     for _, a, b in windows:
@@ -253,7 +282,9 @@ def fetch_race_data(
     stints       = _get("stints", session_key=sk)
     pit_stops    = _get("pit", session_key=sk)
     race_control = _get("race_control", session_key=sk)
-    progress_cb(f"  {len(drivers)} drivers, {sum(map(len, laps_by.values()))} laps")
+    team_radio   = _get("team_radio", session_key=sk)
+    progress_cb(f"  {len(drivers)} drivers, {sum(map(len, laps_by.values()))} laps, "
+                f"{len(team_radio)} radio clips")
 
     # ── Raw positions, a few drivers at a time ──────────────────────────────
     def load_locations(num):
@@ -312,6 +343,10 @@ def fetch_race_data(
         step = max(1, int(m.sum()) // 3000)
         track_points = [[round(float(px), 1), round(float(py), 1)]
                         for px, py in zip(x[m][::step], y[m][::step])]
+    # Prefer the pit lane traced in this session; many stored ones jump across
+    # the circuit (gaps of 300+ m between points)
+    pit_lane = _pit_lane_from_stops(pit_stops, raw) or (
+        pit_lane if pit_lane and _max_jump(pit_lane) < 1000 else None)
     progress_cb(f"  Track layout: {len(track_points)} pts, "
                 f"pit lane: {'yes' if pit_lane else 'none'}")
     loop = _Loop(track_points)
@@ -425,6 +460,12 @@ def fetch_race_data(
         "t_start":      round(min(all_t), 2),
         "t_end":        round(max(all_t), 2),
         "track_status": _track_status(race_control, t0),
+        # [t, driver number, mp3 url]; the clips are served by F1's CDN
+        "radio":        sorted([round(_ts(r["date"]) - t0, 2), str(r["driver_number"]),
+                                r["recording_url"]]
+                               for r in team_radio
+                               if r.get("recording_url") and r.get("date")
+                               and str(r["driver_number"]) in driver_data),
         "total_laps":   max((l["lap_number"] for ls in laps_by.values() for l in ls),
                             default=0),
     }
