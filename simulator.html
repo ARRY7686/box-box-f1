@@ -1763,9 +1763,15 @@ const progRing   = document.getElementById('prog-ring');
 
 let gpCachedSessions = {};
 
+async function fetchJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
 {
   const cur = new Date().getFullYear();
-  for (let y = cur; y >= 2018; y--) {
+  for (let y = cur; y >= 2023; y--) {   // OpenF1 data starts in 2023
     const o = document.createElement('option');
     o.value = o.textContent = y;
     if (y === 2024) o.selected = true;
@@ -1826,7 +1832,7 @@ loadBtn.addEventListener('click', async () => {
     loadBtn.setAttribute('aria-disabled','true');
     loadBtn.textContent = 'Loading…';
     try {
-      const d = await fetch(dataUrl).then(r=>r.json());
+      const d = await fetchJson(dataUrl);
       initData(d);
     } catch(e) {
       loadBtn.setAttribute('aria-disabled','false');
@@ -1852,7 +1858,7 @@ loadBtn.addEventListener('click', async () => {
         if (!gpCachedSessions[gp].includes(session)) gpCachedSessions[gp].push(session);
         progLog.textContent += '\nLoading simulation data…';
         try {
-          const d = await fetch(dataUrl).then(r=>r.json());
+          const d = await fetchJson(dataUrl);
           initData(d);
         } catch(e) {
           progLog.textContent += '\nFailed to load data: ' + e.message;

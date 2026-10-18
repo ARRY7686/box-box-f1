@@ -15,14 +15,12 @@ from pathlib import Path
 PORT     = int(os.environ.get("PORT", 7860))
 BASE     = Path(__file__).parent
 RCACHE   = BASE / "race_cache"   # processed race JSON files
-FF1C     = BASE / "cache"        # FastF1 raw telemetry cache
 
 RCACHE.mkdir(exist_ok=True)
-FF1C.mkdir(exist_ok=True)
 os.chdir(BASE)
 
 # In-memory schedule cache: year -> list of {name, round}.
-# Avoids hitting the FastF1 / Ergast API on every page load.
+# Avoids hitting the OpenF1 API on every page load.
 _SCHED_CACHE: dict = {}
 _SCHED_LOCK  = threading.Lock()
 _SESSIONS    = ('R', 'Q', 'S', 'FP1', 'FP2', 'FP3')
@@ -46,7 +44,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         q      = urllib.parse.parse_qs(parsed.query)
         path   = parsed.path
 
-        if   path == '/api/schedule': self._schedule(q)
+        if   path in ('/', '/index.html'): self._redirect('/simulator.html')
+        elif path == '/api/schedule': self._schedule(q)
         elif path == '/api/check':    self._check(q)
         elif path == '/api/fetch':    self._fetch_sse(q)
         elif path == '/api/data':     self._serve_data(q)
@@ -55,17 +54,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # ── GET /api/schedule?year=2024 ─────────────────────────────────────────
     def _schedule(self, q):
         try:
-            import fastf1
+            from fetch_data import get_schedule
             year = int(q.get('year', ['2024'])[0])
-            # Fetch from FastF1 once per year per process lifetime
+            # Fetch from OpenF1 once per year per process lifetime
             with _SCHED_LOCK:
                 if year not in _SCHED_CACHE:
-                    fastf1.Cache.enable_cache(str(FF1C))
-                    sched = fastf1.get_event_schedule(year, include_testing=False)
-                    _SCHED_CACHE[year] = [
-                        {'name': row['EventName'], 'round': int(row['RoundNumber'])}
-                        for _, row in sched.iterrows()
-                    ]
+                    _SCHED_CACHE[year] = get_schedule(year)
                 base = _SCHED_CACHE[year]
             # Annotate which sessions are already in race_cache/ (no API call)
             events = []
@@ -117,6 +111,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 output_path=str(out),
                 progress_cb=emit,
             )
+            if not out.exists():
+                raise RuntimeError('no race data was exported')
             emit('__DONE__')
         except Exception as e:
             emit(f'__ERROR__:{e}')
@@ -138,6 +134,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     # ── helpers ──────────────────────────────────────────────────────────────
+    def _redirect(self, location):
+        self.send_response(302)
+        self.send_header('Location', location)
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
     def _json(self, obj, code=200):
         body = json.dumps(obj).encode()
         self.send_response(code)
@@ -150,7 +152,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 server = socketserver.ThreadingTCPServer(('', PORT), Handler)
 server.allow_reuse_address = True
 
-print(f'  F1 Simulator  →  http://localhost:{PORT}/simulator.html')
+print(f'  F1 Simulator  ->  http://localhost:{PORT}/simulator.html')
 print('  Press Ctrl+C to stop\n')
 
 threading.Thread(target=server.serve_forever, daemon=True).start()
