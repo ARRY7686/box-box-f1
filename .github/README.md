@@ -193,8 +193,10 @@ One-time setup for deploys: create a Hugging Face token with **Write** access (h
 
 This is a fan project, not affiliated with Formula 1 or the FIA.
 
+If you enjoyed it, a ⭐ on this repo helps other F1 and data fans find it.
+
 ---
 
 ## License
 
-MIT
+MIT, see [LICENSE](https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models/blob/master/LICENSE).

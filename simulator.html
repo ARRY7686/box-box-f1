@@ -587,6 +587,16 @@ body {
   flex-shrink: 0; width: 14px; height: 14px;
   border-radius: 50%; margin-top: 2px;
 }
+/* Links to the source, in the menu, help panel and final classification */
+.gh-link {
+  display: block; align-self: center; text-align: center;
+  font-size: 10px; letter-spacing: 1px; color: rgba(255,255,255,0.45);
+  text-decoration: none; transition: color .15s;
+}
+.gh-link:hover { color: #fff; }
+.help-foot { font-size: 11px; line-height: 1.6; color: rgba(255,255,255,0.45); text-align: center; }
+.help-foot a { color: rgba(255,255,255,0.8); }
+
 #help-close {
   align-self: center;
   margin-top: 4px;
@@ -809,6 +819,8 @@ body {
       <div class="ring" id="prog-ring" style="display:none"></div>
       <div id="prog-log"></div>
     </div>
+
+    <a class="gh-link" href="https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models" target="_blank" rel="noopener">Open source · ★ Star it on GitHub</a>
   </div>
 </div>
 
@@ -877,6 +889,7 @@ body {
     <div id="summary-title">Final Classification</div>
     <div id="summary-rows"></div>
     <div id="summary-close" role="button">Close</div>
+    <a class="gh-link" href="https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models" target="_blank" rel="noopener">Enjoyed the replay? ★ Star it on GitHub</a>
   </div>
 </div>
 
@@ -941,6 +954,12 @@ body {
       <div class="help-row"><span class="help-key">FL badge</span>Fastest Lap holder shown with a purple badge (top-right)</div>
       <div class="help-row"><span class="help-key">Overtake log</span>Bottom-left flashes when a position change happens</div>
       <div class="help-row"><span class="help-key">End of race</span>Final Classification table shown automatically</div>
+    </div>
+
+    <div class="help-foot">
+      Open source on <a href="https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models" target="_blank" rel="noopener">GitHub</a>, with data from
+      <a href="https://openf1.org" target="_blank" rel="noopener">OpenF1</a>.
+      If you enjoyed it, a ★ on GitHub helps other people find it.
     </div>
 
     <div id="help-close" role="button">Got it</div>
