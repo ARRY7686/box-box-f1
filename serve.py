@@ -5,10 +5,12 @@ Usage:  python serve.py
 """
 import gzip
 import http.server
+import re
 import socketserver
 import threading
 import webbrowser
 import os
+import sys
 import json
 import urllib.parse
 from pathlib import Path
@@ -44,6 +46,38 @@ def find_race(year, gp, session):
     return None
 
 
+# fetch_data writes grand_prix, year and session first, so the head of the file is enough
+_HEAD = re.compile(r'^\{"grand_prix":("(?:[^"\\]|\\.)*"),"year":(\d+),"session":"(\w+)"')
+
+
+def cached_races() -> list:
+    """[{year, gp, session}] for every downloaded session, newest season first."""
+    seen = {}
+    for d in (RCACHE, SEED):
+        if not d.exists():
+            continue
+        for f in d.glob('*.json'):
+            with open(f, encoding='utf-8') as fh:
+                m = _HEAD.match(fh.read(400))
+            if m:
+                key = (int(m.group(2)), json.loads(m.group(1)), m.group(3))
+                seen.setdefault(key, True)
+    return [{'year': y, 'gp': g, 'session': s}
+            for y, g, s in sorted(seen, key=lambda k: (-k[0], k[1], k[2]))]
+
+
+_RACE_CACHE: dict = {}
+
+
+def _race_json(f: Path) -> dict:
+    """Parsed race JSON, cached for the most recent file (what-ifs repeat)."""
+    key = (str(f), f.stat().st_mtime)
+    if key not in _RACE_CACHE:
+        _RACE_CACHE.clear()
+        _RACE_CACHE[key] = json.loads(f.read_text(encoding='utf-8'))
+    return _RACE_CACHE[key]
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *_):
         pass
@@ -58,6 +92,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif path == '/api/check':    self._check(q)
         elif path == '/api/fetch':    self._fetch_sse(q)
         elif path == '/api/data':     self._serve_data(q)
+        elif path == '/api/whatif':   self._whatif(q)
+        elif path == '/api/cached':   self._json(cached_races())
         else:                         super().do_GET()
 
     # ── GET /api/schedule?year=2024 ─────────────────────────────────────────
@@ -158,6 +194,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Length', str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    # ── GET /api/whatif?year=&gp=&session=&driver=&lap=&pit_lap=&compound= ──
+    # pit_lap empty = stay out. Answers "what if DRIVER pits at the end of
+    # PIT_LAP for COMPOUND, standing at the end of LAP" (see ml/whatif.py).
+    def _whatif(self, q):
+        get = lambda k, d='': q.get(k, [d])[0]
+        f = find_race(get('year', '2024'), get('gp'), get('session', 'R'))
+        if f is None:
+            self._json({'error': 'race data not cached'}, 404)
+            return
+        try:
+            if str(BASE / 'ml') not in sys.path:
+                sys.path.insert(0, str(BASE / 'ml'))
+            import whatif
+            pit = get('pit_lap')
+            self._json(whatif.whatif(_race_json(f), get('driver'), int(get('lap')),
+                                     int(pit) if pit else None, get('compound', 'HARD').upper()))
+        except FileNotFoundError:
+            self._json({'error': 'strategy model not trained (run ml/train_production.py)'}, 503)
+        except ValueError as e:
+            self._json({'error': str(e)}, 400)
+        except Exception as e:
+            self._json({'error': f'what-if failed: {e}'}, 500)
 
     # ── helpers ──────────────────────────────────────────────────────────────
     def _redirect(self, location):

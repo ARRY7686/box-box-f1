@@ -6,6 +6,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Strategy model: trained at build time from ml/laps_train.csv (before the app
+# files, so editing the app doesn't retrain it)
+COPY ml/ ml/
+RUN python ml/train_production.py
+
 # Copy source files
 COPY fetch_data.py serve.py simulator.html build_tracks.py track_layouts.json precache.py ./
 

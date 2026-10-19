@@ -12,15 +12,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from fetch_data import FIRST_YEAR, _get, _track_status, _ts  # noqa: E402
+from fetch_data import FIRST_YEAR, _get, lap_rows  # noqa: E402
 
 DATA = Path(__file__).parent / "data"
 RAW  = DATA / "raw"
 
 COLUMNS = [
-    "session_key", "year", "date", "circuit", "driver", "team", "lap", "total_laps",
+    "session_key", "year", "date", "circuit", "driver", "team", "lap", "start", "total_laps",
     "lap_time", "s1", "s2", "s3", "compound", "stint", "tyre_age", "stint_lap",
     "pit_in_lap", "pit_out_lap", "neutralised", "track_temp", "air_temp", "rainfall",
+]
+
+TRAIN_COLUMNS = [
+    "session_key", "date", "circuit", "driver", "lap", "total_laps", "lap_time", "compound",
+    "stint", "tyre_age", "stint_lap", "pit_in_lap", "pit_out_lap", "neutralised",
+    "track_temp", "rainfall",
 ]
 
 
@@ -35,86 +41,13 @@ def cached(name: str, endpoint: str, **params):
 
 def race_rows(session: dict) -> list:
     sk = session["session_key"]
-    t0 = _ts(session["date_start"])
     laps    = cached(f"{sk}_laps", "laps", session_key=sk)
     stints  = cached(f"{sk}_stints", "stints", session_key=sk)
     pits    = cached(f"{sk}_pit", "pit", session_key=sk)
     weather = cached(f"{sk}_weather", "weather", session_key=sk)
     rc      = cached(f"{sk}_race_control", "race_control", session_key=sk)
     drivers = {d["driver_number"]: d for d in cached(f"{sk}_drivers", "drivers", session_key=sk)}
-    if not laps:
-        return []
-
-    total_laps = max(l["lap_number"] for l in laps)
-    pit_in = {(p["driver_number"], p["lap_number"]) for p in pits if p.get("lap_number")}
-
-    # Periods when the race was neutralised or under a track-wide yellow
-    status = _track_status(rc, t0)
-    bad = []
-    for i, (t, code, _) in enumerate(status):
-        if code in ("2", "4", "5", "6"):
-            end = next((s[0] for s in status[i + 1:] if s[1] == "1"), float("inf"))
-            bad.append((t, end))
-
-    wx = sorted((_ts(w["date"]) - t0, w) for w in weather)
-
-    def weather_at(t):
-        if not wx:
-            return None
-        lo, hi = 0, len(wx) - 1
-        while lo < hi:
-            mid = (lo + hi + 1) // 2
-            if wx[mid][0] <= t:
-                lo = mid
-            else:
-                hi = mid - 1
-        return wx[lo][1]
-
-    def stint_for(num, lap):
-        # Later stints win when OpenF1's lap ranges overlap at a stop
-        best = None
-        for s in stints:
-            if s["driver_number"] == num and s.get("lap_start") is not None \
-                    and s["lap_start"] <= lap <= (s.get("lap_end") or 10 ** 6):
-                if best is None or (s.get("stint_number") or 0) > (best.get("stint_number") or 0):
-                    best = s
-        return best
-
-    rows = []
-    for l in laps:
-        if not l.get("lap_duration") or not l.get("date_start"):
-            continue
-        num, n = l["driver_number"], l["lap_number"]
-        a = _ts(l["date_start"]) - t0
-        b = a + l["lap_duration"]
-        st = stint_for(num, n)
-        w = weather_at(a) or {}
-        compound = str((st or {}).get("compound") or "UNKNOWN").upper()
-        rows.append({
-            "session_key": sk,
-            "year": session["year"],
-            "date": session["date_start"][:10],
-            "circuit": session.get("circuit_short_name") or "",
-            "driver": num,
-            "team": (drivers.get(num) or {}).get("team_name") or "",
-            "lap": n,
-            "total_laps": total_laps,
-            "lap_time": l["lap_duration"],
-            "s1": l.get("duration_sector_1"),
-            "s2": l.get("duration_sector_2"),
-            "s3": l.get("duration_sector_3"),
-            "compound": compound,
-            "stint": (st or {}).get("stint_number"),
-            "tyre_age": None if st is None else (st.get("tyre_age_at_start") or 0) + n - st["lap_start"],
-            "stint_lap": None if st is None else n - st["lap_start"] + 1,
-            "pit_in_lap": int((num, n) in pit_in),
-            "pit_out_lap": int(bool(l.get("is_pit_out_lap"))),
-            "neutralised": int(any(s < b and e > a for s, e in bad)),
-            "track_temp": w.get("track_temperature"),
-            "air_temp": w.get("air_temperature"),
-            "rainfall": w.get("rainfall"),
-        })
-    return rows
+    return lap_rows(session, laps, stints, pits, weather, rc, drivers)
 
 
 def main():
@@ -139,6 +72,13 @@ def main():
                 n_races += bool(rows)
                 print(f"  {year} {s.get('circuit_short_name')}: {len(rows)} laps", flush=True)
     print(f"Wrote {out} ({n_races} races)")
+
+    # Slim copy with only what the model needs; committed and used by the
+    # Docker build to train the app's model (kept under Hugging Face's 10 MB limit)
+    import pandas as pd
+    slim = Path(__file__).parent / "laps_train.csv"
+    pd.read_csv(out)[TRAIN_COLUMNS].to_csv(slim, index=False, float_format="%.3f")
+    print(f"Wrote {slim} ({slim.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":

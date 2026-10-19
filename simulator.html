@@ -229,7 +229,27 @@ body {
   text-transform: uppercase;
   color: rgba(255,255,255,0.22);
   margin-bottom: 5px;
+  pointer-events: all; cursor: pointer;
+  transition: color .15s;
 }
+#race-title:hover { color: rgba(255,255,255,0.6); }
+#race-title::after { content: ' \25BE'; letter-spacing: 0; }
+#menu-back {
+  position: absolute; top: 14px; right: 16px;
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(255,255,255,0.35); cursor: pointer; display: none;
+}
+#menu-back:hover { color: #fff; }
+#instant { display: none; flex-direction: column; gap: 8px; }
+#instant-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 96px; overflow-y: auto; }
+.chip {
+  padding: 4px 10px; border-radius: 12px; cursor: pointer;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  font-size: 10px; color: rgba(255,255,255,0.7); white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.chip:hover { background: rgba(225,6,0,0.35); color: #fff; }
+.chip.current { border-color: rgba(225,6,0,0.7); color: #fff; }
 #timer {
   font-size: 30px;
   font-weight: 200;
@@ -259,22 +279,62 @@ body {
 #follow-badge.on { display: flex; }
 #follow-badge:hover { color: rgba(255,255,255,0.65); }
 #follow-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Pit-stop what-if panel ──────────────────────────────────────────── */
+#whatif {
+  position: absolute; top: 56px; left: 18px;
+  width: 360px; max-width: calc(100vw - 36px); max-height: calc(100vh - 200px); overflow-y: auto;
+  display: none; flex-direction: column; gap: 10px;
+  padding: 16px;
+  background: rgba(0,0,0,0.72);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  backdrop-filter: blur(14px);
+  pointer-events: all;
+  font-size: 11px; color: rgba(255,255,255,0.7);
+}
+#whatif.on { display: flex; }
+.wi-title { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.4); }
+.wi-title b { color: #fff; font-weight: 600; }
+.wi-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wi-controls select {
+  background: rgba(255,255,255,0.06); color: #fff;
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 4px;
+  font-size: 11px; padding: 4px 6px;
+}
+.wi-controls option { background: #111; }
+.wi-btn {
+  padding: 5px 12px; border-radius: 4px; cursor: pointer; text-align: center;
+  background: rgba(225,6,0,0.75); color: #fff;
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+}
+.wi-btn.ghosted { background: rgba(255,255,255,0.08); }
+.wi-btn:hover { filter: brightness(1.2); }
+.wi-headline { font-size: 12px; color: #fff; line-height: 1.5; }
+.wi-row { display: grid; grid-template-columns: 46px 48px 52px 1fr 48px; gap: 6px; align-items: center; padding: 3px 0; }
+.wi-row.head { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.3); }
+.wi-name { display: flex; align-items: center; gap: 5px; letter-spacing: 1px; }
+.wi-num  { text-align: right; font-variant-numeric: tabular-nums; }
+.wi-chance { display: flex; gap: 6px; align-items: center; }
+.wi-bar  { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); position: relative; }
+.wi-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: #43B02A; }
+.wi-note { font-size: 9px; color: rgba(255,255,255,0.3); line-height: 1.5; }
+.wi-err  { color: #ff6b6b; }
 #follow-x   { margin-left: 2px; color: rgba(255,255,255,0.2); }
 
 /* right: standings */
 #standings {
   position: absolute;
   right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 64px; bottom: 52px;   /* clear of the header and the tyre legend: fits 22 cars */
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 82vh;
   overflow-y: auto;
   overflow-x: visible;
   pointer-events: all;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
 }
 #standings::-webkit-scrollbar { display: none; }
 .drv-row {
@@ -393,7 +453,7 @@ body {
   bottom: 26px; left: 16px;
   display: flex; gap: 6px;
 }
-#strat-btn, #radio-btn {
+#races-btn, #strat-btn, #radio-btn, #whatif-btn {
   padding: 5px 14px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
@@ -403,8 +463,9 @@ body {
   cursor: pointer; pointer-events: all;
   transition: color .15s, background .15s;
 }
-#strat-btn:hover, #radio-btn:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.07); }
-#strat-btn.on, #radio-btn.on { color: white; background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+#races-btn:hover, #strat-btn:hover, #radio-btn:hover, #whatif-btn:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.07); }
+#whatif-btn.off { opacity: .35; }
+#strat-btn.on, #radio-btn.on, #whatif-btn.on { color: white; background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
 
 /* ── Strategy strip (inside standings column when toggled) ──────────── */
 .strat-strip {
@@ -543,8 +604,8 @@ body {
 /* bottom: controls */
 #tyre-legend {
   position: absolute;
-  bottom: 78px; right: 16px;
-  display: flex; flex-direction: column; gap: 3px;
+  bottom: 30px; right: 16px;
+  display: flex; flex-direction: row; gap: 10px;
   pointer-events: none;
 }
 .tleg { display: flex; align-items: center; gap: 5px; font-size: 8px; color: rgba(255,255,255,0.22); letter-spacing:.5px; }
@@ -642,9 +703,15 @@ body {
   <div class="menu-streak"></div>
 
   <div id="menu-card">
+    <div id="menu-back" role="button">Back to race ✕</div>
     <div id="menu-logo">
       <span id="menu-logo-f1">F1</span>
       <span id="menu-logo-sub">Race Simulator</span>
+    </div>
+
+    <div id="instant">
+      <div class="sel-label">Ready to watch · instant</div>
+      <div id="instant-list"></div>
     </div>
 
     <div class="sel-group">
@@ -715,9 +782,12 @@ body {
   </div>
 
   <div id="tool-btns">
+    <div id="races-btn" role="button">Races</div>
     <div id="strat-btn" role="button">Strategy</div>
     <div id="radio-btn" role="button" class="on">Radio</div>
+    <div id="whatif-btn" role="button" class="off" title="Follow a driver in a race first">What if</div>
   </div>
+  <div id="whatif"></div>
   <div id="help-btn" role="button">?</div>
   <div id="controls">
     <div id="timeline-bar">
@@ -781,6 +851,8 @@ body {
       <div class="help-section-title">Strategy Strip</div>
       <div class="help-row"><span class="help-key">S key</span>Toggle the strategy strip on / off for all drivers</div>
       <div class="help-row"><span class="help-key">H key</span>Open / close this help panel</div>
+      <div class="help-row"><span class="help-key">M key</span>Change race: click the race title or the Races button; downloaded races load instantly</div>
+      <div class="help-row"><span class="help-key">W key</span>Pit-stop what-if for the followed driver: pit at the end of a chosen lap on a chosen compound (or stay out) and see the projected gaps 10 laps later, with a ghost car</div>
       <div class="help-row"><span class="help-key">R key</span>Turn team radio on / off (plays at 1× and 5×; only the followed driver's radio while following)</div>
       <div class="help-row"><span class="help-key">Colours</span><span style="display:inline-flex;gap:4px;margin-left:4px">
         <span style="width:22px;height:8px;background:#E8002D;border-radius:2px"></span>
@@ -846,9 +918,11 @@ body {
     });
   }
 
+  let running = true;
+  window.startMenuBg = () => { if (!running) { running = true; requestAnimationFrame(drawMenu); } };
   function drawMenu() {
     if (!document.getElementById('menu') ||
-        document.getElementById('menu').style.display === 'none') return;
+        document.getElementById('menu').style.display === 'none') { running = false; return; }
     mctx.clearRect(0, 0, mW, mH);
 
     const now = performance.now() * 0.001;
@@ -1345,6 +1419,161 @@ function pushRadioLog(drv) {
   while (log.children.length > 3) log.removeChild(log.lastChild);
 }
 
+// ── Pit-stop what-if ─────────────────────────────────────────────────────────
+// The server simulates the next laps twice (real strategy vs the chosen one);
+// ghost = the followed driver's race time at the end of laps L..until in the what-if.
+let ghost = null;   // {num, lap, times}
+const wiPanel = document.getElementById('whatif');
+const wiBtn   = document.getElementById('whatif-btn');
+const CMP_NAME = {SOFT:'Soft', MEDIUM:'Medium', HARD:'Hard', INTERMEDIATE:'Inter', WET:'Wet'};
+
+function whatifAvailable() {
+  return !!(raceData && raceData.lap_table && cam.follow && ['R','S'].includes(raceData.session));
+}
+
+function updateWhatifBtn() {
+  wiBtn.classList.toggle('off', !whatifAvailable());
+  wiBtn.title = !raceData?.lap_table ? 'Re-download this race to enable the what-if'
+              : !['R','S'].includes(raceData?.session) ? 'Available for races and sprints'
+              : !cam.follow ? 'Follow a driver first (click a car)' : 'Pit-stop what-if (W)';
+}
+
+function closeWhatif() { wiPanel.classList.remove('on'); wiBtn.classList.remove('on'); }
+
+function note(text, cls = 'wi-note') {
+  const el = document.createElement('div'); el.className = cls; el.textContent = text; return el;
+}
+
+function openWhatif() {
+  if (!whatifAvailable()) { updateWhatifBtn(); return; }
+  if (playing) document.getElementById('play-btn').click();
+  const num = cam.follow, drv = raceData.drivers[num];
+  const L = getLap(drv.laps, simTime) - 1;           // laps completed
+  const N = raceData.total_laps;
+  const title = document.createElement('div');
+  title.className = 'wi-title';
+  title.append('What if · ');
+  const b = document.createElement('b'); b.textContent = drv.name;
+  title.append(b, ` · from the end of lap ${L}`);
+  wiPanel.replaceChildren(title);
+  if (L < 3 || L >= N - 2) {
+    wiPanel.append(note(`Pick a moment between lap 3 and lap ${N - 3}.`));
+  } else {
+    const ctl = document.createElement('div'); ctl.className = 'wi-controls';
+    const pit = document.createElement('select');
+    pit.add(new Option('Stay out', ''));
+    for (let p = L + 1; p <= Math.min(L + 8, N - 2); p++) pit.add(new Option(`Pit end of lap ${p}`, p));
+    pit.selectedIndex = 1;
+    const cmp = document.createElement('select');
+    for (const c of ['SOFT','MEDIUM','HARD','INTERMEDIATE','WET']) cmp.add(new Option(CMP_NAME[c], c));
+    cmp.value = getTyre(drv, simTime).compound === 'HARD' ? 'MEDIUM' : 'HARD';
+    const go = document.createElement('div'); go.className = 'wi-btn'; go.textContent = 'Simulate';
+    pit.addEventListener('change', () => { cmp.disabled = !pit.value; });
+    go.addEventListener('click', () => runWhatif(num, L, pit.value, cmp.value));
+    ctl.append(pit, cmp, go);
+    const out = document.createElement('div'); out.id = 'wi-result';
+    out.style.display = 'flex'; out.style.flexDirection = 'column'; out.style.gap = '6px';
+    wiPanel.append(ctl, out);
+  }
+  wiPanel.classList.add('on'); wiBtn.classList.add('on');
+}
+
+const fmtG = g => g == null ? '–' : (g > 0 ? '+' : '') + g.toFixed(1);
+
+async function runWhatif(num, L, pitLap, compound) {
+  const out = document.getElementById('wi-result');
+  out.replaceChildren(note('Simulating…'));
+  const q = new URLSearchParams({year: raceData.year, gp: raceData.grand_prix, session: raceData.session,
+                                 driver: num, lap: L, pit_lap: pitLap, compound});
+  let r;
+  try {
+    const res = await fetch('/api/whatif?' + q);
+    r = await res.json();
+    if (!res.ok) throw new Error(r.error || res.statusText);
+  } catch (e) { out.replaceChildren(note('Could not simulate: ' + e.message, 'wi-note wi-err')); return; }
+
+  const drv = raceData.drivers[num];
+  const plan = r.pit_lap ? `pits at the end of lap ${r.pit_lap} for ${CMP_NAME[r.compound].toLowerCase()}s`
+                         : 'stays out';
+  const head = document.createElement('div'); head.className = 'wi-headline';
+  head.textContent = `If ${drv.name} ${plan}: projected P${r.position_whatif} at the end of lap ${r.until} ` +
+                     `(P${r.position_actual_plan} with the real strategy).`;
+  out.replaceChildren(head);
+
+  const hdr = document.createElement('div'); hdr.className = 'wi-row head';
+  for (const t of ['Rival', 'Gap now', 'What-if', 'Chance ahead', 'Really']) hdr.append(note(t, ''));
+  out.append(hdr);
+  // The 8 rivals closest in the what-if, in projected order
+  const nearest = [...r.rivals].sort((a, b) => Math.abs(a.gap_whatif) - Math.abs(b.gap_whatif))
+                               .slice(0, 8).sort((a, b) => b.gap_whatif - a.gap_whatif);
+  for (const rv of nearest) {
+    const rd = raceData.drivers[rv.driver]; if (!rd) continue;
+    const row = document.createElement('div'); row.className = 'wi-row';
+    const name = document.createElement('div'); name.className = 'wi-name';
+    const dot = document.createElement('span'); dot.className = 'radio-dot';
+    dot.style.background = rd.color; dot.style.marginRight = '0';
+    name.append(dot, rd.name);
+    const chance = document.createElement('div'); chance.className = 'wi-chance';
+    const bar = document.createElement('div'); bar.className = 'wi-bar';
+    const fill = document.createElement('span'); fill.style.width = (rv.p_ahead_whatif * 100) + '%';
+    bar.append(fill);
+    chance.title = `${Math.round(rv.p_ahead_whatif * 100)}% with the what-if, ` +
+                   `${Math.round(rv.p_ahead_actual_plan * 100)}% with the real strategy`;
+    chance.append(bar, note(`${Math.round(rv.p_ahead_whatif * 100)}%`, 'wi-num'));
+    row.append(name, note(fmtG(rv.gap_now), 'wi-num'), note(fmtG(rv.gap_whatif), 'wi-num'), chance,
+               note(fmtG(rv.gap_really), 'wi-num'));
+    out.append(row);
+  }
+  out.append(note(`Gaps in seconds (+ = ${drv.name} behind) at the end of lap ${r.until}. ` +
+                  `"Really" is what happened with the real strategy. Model trained on ${r.model.races} races; ` +
+                  `chances come from its errors on races it never saw.`));
+  const watch = document.createElement('div'); watch.className = 'wi-btn ghosted';
+  watch.textContent = 'Watch it with a ghost car';
+  watch.addEventListener('click', () => {
+    ghost = {num, lap: L, times: r.ghost};
+    simTime = r.ghost[0] - 2; resetOvertakes(); resetRadio();
+    closeWhatif();
+    if (!playing) document.getElementById('play-btn').click();
+  });
+  out.append(watch);
+}
+
+wiBtn.addEventListener('click', () => wiPanel.classList.contains('on') ? closeWhatif() : openWhatif());
+
+// Ghost position: the real car's path, re-timed so lap n ends at the what-if time
+function ghostPos() {
+  if (!ghost || !raceData) return null;
+  const {num, lap: L, times} = ghost;
+  if (simTime < times[0] || simTime > times[times.length - 1]) return null;
+  const drv = raceData.drivers[num], laps = drv.laps, P = drv.positions;
+  let i = 1; while (i < times.length - 1 && simTime > times[i]) i++;
+  const n = L + i;                                   // ghost is on lap n
+  const t0 = laps[n - 1], t1 = laps[n] ?? P[P.length - 1][0];
+  if (t0 == null) return null;
+  const d0 = interp(P, t0).d, d1 = interp(P, t1).d;
+  const f = (simTime - times[i - 1]) / Math.max(1e-6, times[i] - times[i - 1]);
+  const d = d0 + f * (d1 - d0);
+  let lo = 0, hi = P.length - 1;                     // distance -> sample
+  while (lo < hi) { const m = (lo + hi) >> 1; if (P[m][4] < d) lo = m + 1; else hi = m; }
+  const a = P[Math.max(0, lo - 1)], b = P[lo];
+  const g = b[4] === a[4] ? 0 : (d - a[4]) / (b[4] - a[4]);
+  return {x: a[1] + (b[1] - a[1]) * g, y: a[2] + (b[2] - a[2]) * g, drv};
+}
+
+function drawGhost(nowTs) {
+  const gp = ghostPos(); if (!gp) return;
+  const [sx, sy] = worldToScreen(gp.x, gp.y);
+  ctx.save();
+  ctx.setLineDash([3, 3]); ctx.lineWidth = 2; ctx.strokeStyle = gp.drv.color;
+  ctx.globalAlpha = 0.6 + 0.3 * Math.sin(nowTs / 200);
+  ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha = 0.9;
+  ctx.font = '700 8px -apple-system,sans-serif'; ctx.fillStyle = gp.drv.color; ctx.textAlign = 'center';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(gp.drv.name + ' WHAT-IF', sx + 11, sy);
+  ctx.restore();
+}
+
 // ── Draw Track ───────────────────────────────────────────────────────────────
 function drawTrack() {
   if (!trackP2D) return;
@@ -1513,6 +1742,7 @@ function frame(ts) {
   ctx.fillStyle='#04040a'; ctx.fillRect(0,0,W,H);
   drawTrack();
   drawCars(entries,ts);
+  drawGhost(ts);
 
   if (cam.follow) {
     document.getElementById('minimap').classList.add('on');
@@ -1523,6 +1753,7 @@ function frame(ts) {
 
   checkOvertakes(entries,ts);
   checkRadio();
+  updateWhatifBtn();
   updateHUD(entries);
 }
 
@@ -1658,6 +1889,7 @@ function enterFollow(num){
 }
 function exitFollow(){
   cam.follow=null;
+  closeWhatif();
   cam.tx=cam.baseX; cam.ty=cam.baseY; cam.tz=cam.baseZoom;
   document.getElementById('follow-badge').classList.remove('on');
   document.getElementById('minimap').classList.remove('on');
@@ -1781,6 +2013,8 @@ document.getElementById('strat-btn').addEventListener('click', () => {
 
 window.addEventListener('keydown',e=>{
   if(!raceData) return;
+  if(menuOpen()) { if(e.code==='Escape') closeMenu(); return; }
+  if(e.code==='KeyM') { openMenu(); return; }
   if(e.code==='Space'){e.preventDefault();document.getElementById('play-btn').click();}
   else if(e.code==='ArrowRight'){simTime=Math.min(raceData.t_end,simTime+30*simSpeed);resetOvertakes(); resetRadio();}
   else if(e.code==='ArrowLeft') {simTime=Math.max(raceData.t_start,simTime-30*simSpeed);resetOvertakes(); resetRadio();}
@@ -1794,6 +2028,7 @@ window.addEventListener('keydown',e=>{
   else if(e.key>='1'&&e.key<='5') document.querySelectorAll('.spd')[+e.key-1]?.click();
   else if(e.code==='KeyS') document.getElementById('strat-btn').click();
   else if(e.code==='KeyR') document.getElementById('radio-btn').click();
+  else if(e.code==='KeyW') document.getElementById('whatif-btn').click();
   else if(e.code==='KeyH') document.getElementById('help-btn').click();
 });
 
@@ -1820,11 +2055,13 @@ function initData(d) {
   buildMiniMap();
   initCamera();
   resetOvertakes(); resetRadio();
+  ghost=null; closeWhatif();
   _flCache=null; _flCacheT=-1;
   const SL={R:'Race',Q:'Qualifying',S:'Sprint',FP1:'Practice 1',FP2:'Practice 2',FP3:'Practice 3'};
   document.getElementById('race-title').textContent=
     `${d.year} · ${d.grand_prix.replace(/ Grand Prix$/i,'').trim()} Grand Prix · ${SL[d.session]||d.session}`;
-  document.getElementById('menu').style.display='none';
+  closeMenu();
+  history.replaceState(null, '', '#' + [d.year, d.grand_prix, d.session].map(encodeURIComponent).join('/'));
   document.getElementById('summary').classList.remove('on');
   playing=true; lastTs=null;
   document.getElementById('play-btn').textContent='⏸';
@@ -1965,7 +2202,70 @@ loadBtn.addEventListener('click', async () => {
   }
 });
 
-loadSchedule(selYear.value);
+// ── Race switcher ────────────────────────────────────────────────────────────
+const menuEl = document.getElementById('menu');
+function menuOpen() { return menuEl.style.display !== 'none'; }
+
+function closeMenu() {
+  menuEl.style.display = 'none';
+}
+
+async function openMenu() {
+  if (playing) document.getElementById('play-btn').click();
+  stopRadio(); closeWhatif();
+  menuEl.style.display = 'flex';
+  window.startMenuBg();
+  document.getElementById('menu-back').style.display = raceData ? 'block' : 'none';
+  progWrap.style.display = 'none'; progLog.textContent = '';
+  loadBtn.textContent = 'Load Race';
+  if (raceData) {
+    selYear.value = raceData.year;
+    await loadSchedule(raceData.year);
+    selGP.value = raceData.grand_prix; selSession.value = raceData.session;
+    updateCacheBadge();
+  }
+  refreshInstant();
+}
+
+async function refreshInstant() {
+  let races = [];
+  try { races = await fetchJson('/api/cached'); } catch (e) { /* no list: hide the section */ }
+  const box = document.getElementById('instant'), list = document.getElementById('instant-list');
+  const SN = {R:'Race', Q:'Quali', S:'Sprint', FP1:'FP1', FP2:'FP2', FP3:'FP3'};
+  list.replaceChildren(...races.map(r => {
+    const c = document.createElement('div');
+    c.className = 'chip';
+    if (raceData && r.year === raceData.year && r.gp === raceData.grand_prix && r.session === raceData.session)
+      c.classList.add('current');
+    c.textContent = `${r.year} ${r.gp.replace(/ Grand Prix$/, '')} · ${SN[r.session] || r.session}`;
+    c.addEventListener('click', () => loadByName(r.year, r.gp, r.session));
+    return c;
+  }));
+  box.style.display = races.length ? 'flex' : 'none';
+}
+
+// Select a session in the menu and load it (instant if downloaded, else downloads)
+async function loadByName(year, gp, session) {
+  selYear.value = year;
+  await loadSchedule(year);
+  if (![...selGP.options].some(o => o.value === gp)) return;
+  selGP.value = gp; selSession.value = session;
+  updateCacheBadge();
+  loadBtn.click();
+}
+
+document.getElementById('race-title').addEventListener('click', openMenu);
+document.getElementById('races-btn').addEventListener('click', openMenu);
+document.getElementById('menu-back').addEventListener('click', closeMenu);
+
+// Shareable links: #2024/Bahrain%20Grand%20Prix/R
+const linked = location.hash.slice(1).split('/').map(decodeURIComponent);
+if (linked.length === 3 && +linked[0] >= 2023) {
+  loadByName(+linked[0], linked[1], linked[2]);
+} else {
+  loadSchedule(selYear.value);
+}
+refreshInstant();
 
 W=canvas.width=window.innerWidth;
 H=canvas.height=window.innerHeight;

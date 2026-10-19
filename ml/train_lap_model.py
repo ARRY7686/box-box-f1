@@ -3,7 +3,7 @@
 Train and evaluate the lap-time model behind the strategy simulator.
 
 Task: standing at lap L of a race, predict a driver's lap time at lap L+k
-(k = 1..25) given the tyres and fuel load of that future lap. The anchor is
+(k = 1..30) given the tyres and fuel load of that future lap. The anchor is
 the driver's median clean lap over their last 5 clean laps up to L; the model
 predicts the difference from it. Pairs that cross a pit stop teach it what a
 fresh set of each compound is worth.
@@ -23,7 +23,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 
 DATA = Path(__file__).parent / "data"
 CUTOFF = sys.argv[1] if len(sys.argv) > 1 else "2025-07-01"
-MAX_K = 25
+MAX_K = 30
 ANCHOR_N = 5
 COMPOUNDS = ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"]
 
@@ -89,24 +89,43 @@ def stint_slopes(clean: pd.DataFrame) -> pd.Series:
 
 
 def report(name, err, pairs):
-    by_k = pd.Series(np.abs(err)).groupby(pd.cut(pairs.k, [0, 1, 5, 10, 25])).mean()
+    by_k = pd.Series(np.abs(err)).groupby(pd.cut(pairs.k, [0, 1, 5, 10, 20, 30]), observed=False).mean()
     cross = np.abs(err[pairs.same_stint.to_numpy() == 0]).mean()
     print(f"{name:<28} MAE {np.abs(err).mean():.3f}s | by horizon "
           + " ".join(f"{v:.3f}" for v in by_k.values)
           + f" | across a pit stop {cross:.3f}s")
 
 
-def main():
-    laps = pd.read_csv(DATA / "laps.csv")
+def encode(df: pd.DataFrame, circuits: list) -> pd.DataFrame:
+    """Integer codes for the categorical features (unknown circuit -> -1)."""
+    df = df.copy()
+    df["circuit_code"] = df.circuit.map({c: i for i, c in enumerate(circuits)}).fillna(-1)
+    for c in ("a_compound", "t_compound"):
+        df[c] = df[c].map({c: i for i, c in enumerate(COMPOUNDS)})
+    return df
+
+
+def prepare(laps: pd.DataFrame):
+    """Clean laps and (anchor, target) pairs with encoded features."""
     clean = clean_laps(laps)
     clean["stint_slope"] = stint_slopes(clean)
     circuits = sorted(clean.circuit.unique())
-    rng = np.random.default_rng(0)
-    pairs = make_pairs(clean, rng)
-    pairs["circuit_code"] = pairs.circuit.map({c: i for i, c in enumerate(circuits)})
-    for c in ("a_compound", "t_compound"):
-        pairs[c] = pairs[c].map({c: i for i, c in enumerate(COMPOUNDS)})
+    pairs = encode(make_pairs(clean, np.random.default_rng(0)), circuits)
     pairs["y"] = pairs.target - pairs.anchor
+    return clean, pairs, circuits
+
+
+def fit(pairs: pd.DataFrame) -> HistGradientBoostingRegressor:
+    model = HistGradientBoostingRegressor(
+        loss="absolute_error", max_iter=600, learning_rate=0.05, max_leaf_nodes=63,
+        min_samples_leaf=200, l2_regularization=1.0,
+        categorical_features=[FEATURES.index(c) for c in CATEGORICAL], random_state=0)
+    return model.fit(pairs[FEATURES], pairs.y)
+
+
+def main():
+    laps = pd.read_csv(DATA / "laps.csv")
+    clean, pairs, circuits = prepare(laps)
 
     train = pairs[pairs.date < CUTOFF]
     test = pairs[pairs.date >= CUTOFF].reset_index(drop=True)
@@ -114,18 +133,24 @@ def main():
           f"train {len(train)} ({train.session_key.nunique()} races), "
           f"test {len(test)} ({test.session_key.nunique()} races from {CUTOFF})")
 
-    model = HistGradientBoostingRegressor(
-        loss="absolute_error", max_iter=600, learning_rate=0.05, max_leaf_nodes=63,
-        min_samples_leaf=200, l2_regularization=1.0,
-        categorical_features=[FEATURES.index(c) for c in CATEGORICAL], random_state=0)
-    model.fit(train[FEATURES], train.y)
+    model = fit(train)
     pred = model.predict(test[FEATURES])
 
-    print("\nLap-time error on unseen races (seconds; horizons 1 | 2-5 | 6-10 | 11-25 laps)")
+    print("\nLap-time error on unseen races (seconds; horizons 1 | 2-5 | 6-10 | 11-20 | 21-30 laps)")
     report("Pace stays at anchor", (0 - test.y).to_numpy(), test)
     trend = np.where(test.same_stint == 1, test.a_slope * test.k, 0.0)
     report("Current stint trend", (trend - test.y).to_numpy(), test)
     report("Model", (pred - test.y).to_numpy(), test)
+
+    # Does the gain hold race by race, and in 2026 (new car rules, unseen in training)?
+    per = pd.DataFrame({"race": test.session_key, "year": test.date.str[:4],
+                        "model": np.abs(pred - test.y), "flat": np.abs(test.y)})
+    races = per.groupby(["year", "race"])[["model", "flat"]].mean()
+    print(f"\nModel beats 'pace stays at anchor' in {(races.model < races.flat).sum()} "
+          f"of {len(races)} test races")
+    for year, g in per.groupby("year"):
+        print(f"  {year}: model {g.model.mean():.3f}s vs {g.flat.mean():.3f}s "
+              f"({g.race.nunique()} races)")
 
     meta = {"cutoff": CUTOFF, "features": FEATURES, "circuits": circuits,
             "compounds": COMPOUNDS, "test_mae": float(np.abs(pred - test.y).mean())}

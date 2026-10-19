@@ -36,6 +36,10 @@ SESSION_NAMES = {
     "FP3": "Practice 3",
 }
 COMPOUNDS = {"SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"}
+LAP_TABLE_COLUMNS = [
+    "driver", "lap", "start", "total_laps", "lap_time", "compound", "stint", "tyre_age",
+    "stint_lap", "pit_in_lap", "pit_out_lap", "neutralised", "track_temp", "rainfall",
+]
 
 
 # ── OpenF1 requests ──────────────────────────────────────────────────────────
@@ -256,6 +260,92 @@ def _track_status(race_control: list, t0: float) -> list:
     return out
 
 
+# ── Per-lap table (strategy model input) ─────────────────────────────────────
+
+def lap_rows(session: dict, laps: list, stints: list, pits: list, weather: list,
+             race_control: list, drivers: dict) -> list:
+    """One dict per timed lap: tyres, pit flags, neutralisation, weather.
+
+    Used for ml/data/laps.csv and embedded in race JSON for the what-if tool.
+    """
+    sk = session["session_key"]
+    t0 = _ts(session["date_start"])
+    if not laps:
+        return []
+
+    total_laps = max(l["lap_number"] for l in laps)
+    pit_in = {(p["driver_number"], p["lap_number"]) for p in pits if p.get("lap_number")}
+
+    # Periods when the race was neutralised or under a track-wide yellow
+    status = _track_status(race_control, t0)
+    bad = []
+    for i, (t, code, _) in enumerate(status):
+        if code in ("2", "4", "5", "6"):
+            end = next((s[0] for s in status[i + 1:] if s[1] == "1"), float("inf"))
+            bad.append((t, end))
+
+    wx = sorted((_ts(w["date"]) - t0, w) for w in weather)
+
+    def weather_at(t):
+        if not wx:
+            return None
+        lo, hi = 0, len(wx) - 1
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if wx[mid][0] <= t:
+                lo = mid
+            else:
+                hi = mid - 1
+        return wx[lo][1]
+
+    def stint_for(num, lap):
+        # Later stints win when OpenF1's lap ranges overlap at a stop
+        best = None
+        for s in stints:
+            if s["driver_number"] == num and s.get("lap_start") is not None \
+                    and s["lap_start"] <= lap <= (s.get("lap_end") or 10 ** 6):
+                if best is None or (s.get("stint_number") or 0) > (best.get("stint_number") or 0):
+                    best = s
+        return best
+
+    rows = []
+    for l in laps:
+        if not l.get("lap_duration") or not l.get("date_start"):
+            continue
+        num, n = l["driver_number"], l["lap_number"]
+        a = _ts(l["date_start"]) - t0
+        b = a + l["lap_duration"]
+        st = stint_for(num, n)
+        w = weather_at(a) or {}
+        compound = str((st or {}).get("compound") or "UNKNOWN").upper()
+        rows.append({
+            "session_key": sk,
+            "year": session["year"],
+            "date": session["date_start"][:10],
+            "circuit": session.get("circuit_short_name") or "",
+            "driver": num,
+            "team": (drivers.get(num) or {}).get("team_name") or "",
+            "lap": n,
+            "start": round(a, 3),   # seconds from session start
+            "total_laps": total_laps,
+            "lap_time": l["lap_duration"],
+            "s1": l.get("duration_sector_1"),
+            "s2": l.get("duration_sector_2"),
+            "s3": l.get("duration_sector_3"),
+            "compound": compound,
+            "stint": (st or {}).get("stint_number"),
+            "tyre_age": None if st is None else (st.get("tyre_age_at_start") or 0) + n - st["lap_start"],
+            "stint_lap": None if st is None else n - st["lap_start"] + 1,
+            "pit_in_lap": int((num, n) in pit_in),
+            "pit_out_lap": int(bool(l.get("is_pit_out_lap"))),
+            "neutralised": int(any(s < b and e > a for s, e in bad)),
+            "track_temp": w.get("track_temperature"),
+            "air_temp": w.get("air_temperature"),
+            "rainfall": w.get("rainfall"),
+        })
+    return rows
+
+
 # ── Main export ──────────────────────────────────────────────────────────────
 
 def fetch_race_data(
@@ -276,13 +366,15 @@ def fetch_race_data(
     drivers = {d["driver_number"]: d for d in _get("drivers", session_key=sk)}
     if not drivers:
         raise RuntimeError("OpenF1 has no data for this session yet")
+    all_laps = _get("laps", session_key=sk)
     laps_by = {}
-    for l in _get("laps", session_key=sk):
+    for l in all_laps:
         laps_by.setdefault(l["driver_number"], []).append(l)
     stints       = _get("stints", session_key=sk)
     pit_stops    = _get("pit", session_key=sk)
     race_control = _get("race_control", session_key=sk)
     team_radio   = _get("team_radio", session_key=sk)
+    weather      = _get("weather", session_key=sk)
     progress_cb(f"  {len(drivers)} drivers, {sum(map(len, laps_by.values()))} laps, "
                 f"{len(team_radio)} radio clips")
 
@@ -468,6 +560,15 @@ def fetch_race_data(
                                and str(r["driver_number"]) in driver_data),
         "total_laps":   max((l["lap_number"] for ls in laps_by.values() for l in ls),
                             default=0),
+        # Per-lap table for the pit-stop what-if (columns as in ml/data/laps.csv)
+        "circuit":      session.get("circuit_short_name") or "",
+        "date":         session["date_start"][:10],
+        "lap_table": {
+            "columns": LAP_TABLE_COLUMNS,
+            "rows": [[r[c] for c in LAP_TABLE_COLUMNS]
+                     for r in lap_rows(session, all_laps, stints, pit_stops, weather,
+                                       race_control, drivers)],
+        },
     }
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

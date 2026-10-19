@@ -14,3 +14,4 @@ race_data.json
 
 # Strategy-model dataset and raw OpenF1 cache (rebuilt by ml/build_dataset.py)
 ml/data/
+ml/model.pkl

@@ -7,3 +7,5 @@ race_seed/
 race_data.json
 *.jsonl
 ml/data/
+ml/model.pkl
+**/__pycache__
