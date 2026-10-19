@@ -1530,7 +1530,7 @@ async function runWhatif(num, L, pitLap, compound) {
   const watch = document.createElement('div'); watch.className = 'wi-btn ghosted';
   watch.textContent = 'Watch it with a ghost car';
   watch.addEventListener('click', () => {
-    ghost = {num, lap: L, times: r.ghost};
+    ghost = buildGhost(num, L, r.ghost, r.pit_lap);
     simTime = r.ghost[0] - 2; resetOvertakes(); resetRadio();
     closeWhatif();
     if (!playing) document.getElementById('play-btn').click();
@@ -1540,24 +1540,50 @@ async function runWhatif(num, L, pitLap, compound) {
 
 wiBtn.addEventListener('click', () => wiPanel.classList.contains('on') ? closeWhatif() : openWhatif());
 
-// Ghost position: the real car's path, re-timed so lap n ends at the what-if time
+// Ghost car: each what-if lap replays a real lap of the right kind, re-timed to
+// the what-if lap time. Normal laps copy the driver's nearest normal lap (racing
+// line, real braking points); the what-if in-lap and out-lap copy a real pit
+// stop (the driver's own nearest one, else another driver's), so the ghost
+// drives through the pit lane where it stops and stays on track where it doesn't.
+function buildGhost(num, L, times, pitLap) {
+  const t = raceData.lap_table, c = Object.fromEntries(t.columns.map((k, i) => [k, i]));
+  const rows = t.rows.filter(r => r[c.lap_time] != null).map(r => ({
+    drv: String(r[c.driver]), lap: r[c.lap], start: r[c.start], end: r[c.start] + r[c.lap_time],
+    pitIn: r[c.pit_in_lap], pitOut: r[c.pit_out_lap], neutral: r[c.neutralised]}));
+  const at = new Map(rows.map(r => [`${r.drv}:${r.lap}`, r]));
+  const isNormal = r => r && !r.pitIn && !r.pitOut;
+  const normalLap = n => {
+    for (let k = 0; k < 20; k++)
+      for (const m of [n - k, n + k]) { const r = at.get(`${num}:${m}`); if (isNormal(r)) return r; }
+    return null;
+  };
+  let stop = null;                                   // a real in-lap followed by its out-lap
+  if (pitLap) {
+    const stops = rows.filter(r => r.pitIn && !r.neutral && at.get(`${r.drv}:${r.lap + 1}`)?.pitOut);
+    const own = stops.filter(r => r.drv === num);
+    stop = (own.length ? own : stops).sort((a, b) => Math.abs(a.lap - pitLap) - Math.abs(b.lap - pitLap))[0];
+  }
+  const laps = [];
+  for (let i = 1; i < times.length; i++) {
+    const n = L + i;
+    const tpl = stop && n === pitLap ? stop
+              : stop && n === pitLap + 1 ? at.get(`${stop.drv}:${stop.lap + 1}`)
+              : normalLap(n);
+    laps.push({t0: times[i - 1], t1: times[i], tpl});
+  }
+  return {num, laps};
+}
+
 function ghostPos() {
   if (!ghost || !raceData) return null;
-  const {num, lap: L, times} = ghost;
-  if (simTime < times[0] || simTime > times[times.length - 1]) return null;
-  const drv = raceData.drivers[num], laps = drv.laps, P = drv.positions;
-  let i = 1; while (i < times.length - 1 && simTime > times[i]) i++;
-  const n = L + i;                                   // ghost is on lap n
-  const t0 = laps[n - 1], t1 = laps[n] ?? P[P.length - 1][0];
-  if (t0 == null) return null;
-  const d0 = interp(P, t0).d, d1 = interp(P, t1).d;
-  const f = (simTime - times[i - 1]) / Math.max(1e-6, times[i] - times[i - 1]);
-  const d = d0 + f * (d1 - d0);
-  let lo = 0, hi = P.length - 1;                     // distance -> sample
-  while (lo < hi) { const m = (lo + hi) >> 1; if (P[m][4] < d) lo = m + 1; else hi = m; }
-  const a = P[Math.max(0, lo - 1)], b = P[lo];
-  const g = b[4] === a[4] ? 0 : (d - a[4]) / (b[4] - a[4]);
-  return {x: a[1] + (b[1] - a[1]) * g, y: a[2] + (b[2] - a[2]) * g, drv};
+  const seg = ghost.laps.find(s => simTime >= s.t0 && simTime <= s.t1);
+  if (!seg || !seg.tpl) return null;
+  const f = (simTime - seg.t0) / Math.max(1e-6, seg.t1 - seg.t0);
+  const tt = seg.tpl.start + f * (seg.tpl.end - seg.tpl.start);
+  const src = raceData.drivers[seg.tpl.drv];
+  const p = src && interp(src.positions, tt);
+  if (!p) return null;
+  return {x: p.x, y: p.y, drv: raceData.drivers[ghost.num], pit: isPitting(src, tt)};
 }
 
 function drawGhost(nowTs) {
@@ -1568,9 +1594,9 @@ function drawGhost(nowTs) {
   ctx.globalAlpha = 0.6 + 0.3 * Math.sin(nowTs / 200);
   ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2); ctx.stroke();
   ctx.setLineDash([]); ctx.globalAlpha = 0.9;
-  ctx.font = '700 8px -apple-system,sans-serif'; ctx.fillStyle = gp.drv.color; ctx.textAlign = 'center';
+  ctx.font = '700 8px -apple-system,sans-serif'; ctx.fillStyle = gp.drv.color;
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText(gp.drv.name + ' WHAT-IF', sx + 11, sy);
+  ctx.fillText(gp.drv.name + ' WHAT-IF' + (gp.pit ? ' · PIT' : ''), sx + 11, sy);
   ctx.restore();
 }
 
