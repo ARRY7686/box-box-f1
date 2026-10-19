@@ -41,4 +41,11 @@ jobs:
             echo "::warning::HF_TOKEN secret is not set, so the Space was not updated"
             exit 0
           fi
-          git push "https://Arry7868:${HF_TOKEN}@huggingface.co/spaces/Arry7868/F1-Simulator-for-ML-Simulations" HEAD:main
+          space="https://Arry7868:${HF_TOKEN}@huggingface.co/spaces/Arry7868/F1-Simulator-for-ML-Simulations"
+          # Re-running an old workflow run must not try to roll the Space back
+          git fetch --quiet "$space" main:space-main
+          if git merge-base --is-ancestor HEAD space-main; then
+            echo "::notice::The Space already has this commit or a newer one"
+            exit 0
+          fi
+          git push "$space" HEAD:main
