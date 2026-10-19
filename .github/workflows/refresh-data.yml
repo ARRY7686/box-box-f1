@@ -17,17 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
 
       # Raw OpenF1 responses from earlier runs, so only new races are downloaded
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ml/data/raw
           key: openf1-raw-${{ github.run_id }}
