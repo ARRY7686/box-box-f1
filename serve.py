@@ -22,9 +22,6 @@ BASE     = Path(__file__).parent
 RCACHE   = BASE / "race_cache"   # processed race JSON files
 SEED     = BASE / "race_seed"    # showcase races baked into the image (precache.py)
 
-RCACHE.mkdir(exist_ok=True)
-os.chdir(BASE)
-
 # In-memory schedule cache: year -> list of {name, round}.
 # Avoids hitting the OpenF1 API on every page load.
 _SCHED_CACHE: dict = {}
@@ -79,6 +76,9 @@ def _race_json(f: Path) -> dict:
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(BASE), **kwargs)   # static files
+
     def log_message(self, *_):
         pass
 
@@ -234,19 +234,33 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
-server = socketserver.ThreadingTCPServer(('', PORT), Handler)
-server.allow_reuse_address = True
+class Server(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True    # must be set before bind, so on the class
+    daemon_threads = True
 
-print(f'  F1 Simulator  ->  http://localhost:{PORT}/simulator.html')
-print('  Press Ctrl+C to stop\n')
 
-threading.Thread(target=server.serve_forever, daemon=True).start()
-if os.isatty(0):
-    webbrowser.open(f'http://localhost:{PORT}/simulator.html')
+def make_server(port: int = PORT) -> Server:
+    """The app server on `port` (0 = any free port); call serve_forever() on it."""
+    RCACHE.mkdir(exist_ok=True)
+    return Server(('', port), Handler)
 
-try:
-    threading.Event().wait()
-except KeyboardInterrupt:
-    print('\nStopped.')
-    server.shutdown()
+
+def main():
+    server = make_server()
+    print(f'  F1 Simulator  ->  http://localhost:{PORT}/simulator.html')
+    print('  Press Ctrl+C to stop\n')
+
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    if os.isatty(0):
+        webbrowser.open(f'http://localhost:{PORT}/simulator.html')
+
+    try:
+        threading.Event().wait()
+    except KeyboardInterrupt:
+        print('\nStopped.')
+        server.shutdown()
+
+
+if __name__ == '__main__':
+    main()
 

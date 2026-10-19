@@ -3,6 +3,7 @@
 **Replay any Formula 1 session from 2023 onwards in your browser, with every car on track, live standings, the real team radio, and a machine-learning pit-stop what-if.**
 
 [![Live demo](https://img.shields.io/badge/demo-Hugging%20Face%20Space-yellow?style=flat-square)](https://huggingface.co/spaces/Arry7868/F1-Simulator-for-ML-Simulations)
+[![CI](https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models/actions/workflows/ci.yml/badge.svg)](https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models/actions/workflows/ci.yml)
 ![Data](https://img.shields.io/badge/data-OpenF1-red?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.12-blue?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
@@ -146,15 +147,36 @@ python ml/train_production.py      # the app's model (the Docker build runs this
 │   ├── train_production.py   # Trains the app's model at build time
 │   ├── laps_train.csv        # Training data (every race lap since 2023)
 │   └── whatif_calibration.json
+├── tests/                  # pytest suite (no network)
+├── .github/workflows/      # CI + deploy, weekly data refresh
 ├── Dockerfile
-└── requirements.txt
+├── requirements.txt
+└── requirements-dev.txt    # + pytest
 ```
+
+---
+
+##  Development
+
+```bash
+pip install -r requirements-dev.txt
+pytest                             # under 10 s, no network
+```
+
+The tests cover the data processing (track snapping and lap counting, pit-stop timing, Safety Car codes, the per-lap table, safe file names), the race simulator and what-if engine, and the server API. They run on synthetic races with known answers. As a check on the suite itself, 8 deliberately inserted bugs (including real ones fixed in this project, like reading OpenF1's pit-exit time as the pit entry) were each caught by a failing test.
+
+Two GitHub Actions workflows keep the app current:
+
+- **CI** (`ci.yml`) runs the tests on every push and pull request. When they pass on `master`, it pushes the commit to the Hugging Face Space, which rebuilds the app.
+- **Refresh race data** (`refresh-data.yml`) runs every Tuesday (or on demand from the Actions tab). It downloads any new races from OpenF1, commits the updated `ml/laps_train.csv`, and deploys, so the Space retrains its model on them. It refuses to commit if the race count drops (an OpenF1 outage) or if the file outgrows Hugging Face's 10 MB limit.
+
+One-time setup for deploys: create a Hugging Face token with **Write** access (huggingface.co/settings/tokens) and add it to this repo as an Actions secret named `HF_TOKEN` (Settings → Secrets and variables → Actions). Without it, the workflows still test but skip the deploy.
 
 ---
 
 ##  Deployment
 
-**Hugging Face Spaces.** The YAML header in the root `README.md` configures a Docker Space on port 7860 (GitHub shows this page, `.github/README.md`, instead). Push the repo to the Space and it builds automatically.
+**Hugging Face Spaces.** The YAML header in the root `README.md` configures a Docker Space on port 7860 (GitHub shows this page, `.github/README.md`, instead). The CI workflow pushes every tested commit on `master` to the Space, which rebuilds automatically.
 
 **Fly.io / Render.** The Dockerfile works as is; the app reads the `PORT` environment variable. Mount a persistent volume at `/app/race_cache` so downloaded sessions survive restarts (`fly.toml` is included).
 

@@ -203,6 +203,22 @@ def _lap_windows(laps: list, raw_t, raw_x, raw_y):
     return windows
 
 
+def pit_windows(pit_stops: list, num: int, t0: float) -> list:
+    """[[pit entry, pit exit], ...] in session seconds for one driver.
+
+    OpenF1's pit "date" is when the car leaves the pit lane (checked against
+    position data), so the stop spans [date - duration, date].
+    """
+    out = []
+    for p in pit_stops:
+        if p["driver_number"] != num or not p.get("date"):
+            continue
+        t_out = _ts(p["date"]) - t0
+        dur = p.get("lane_duration") or p.get("pit_duration") or 25.0
+        out.append([round(t_out - float(dur), 2), round(t_out, 2)])
+    return out
+
+
 def _pit_lane_from_stops(pit_stops: list, raw: dict) -> list | None:
     """Pit-lane path traced by a car through a typical timed stop."""
     stops = []
@@ -494,15 +510,7 @@ def fetch_race_data(
                     tyres.append([round(lap_start[n] - t0, 2), comp, int(age)])
         tyres.sort(key=lambda e: e[0])
 
-        # OpenF1's pit "date" is when the car leaves the pit lane (checked
-        # against position data), so the stop spans [date - duration, date].
-        pits = []
-        for p in pit_stops:
-            if p["driver_number"] != num or not p.get("date"):
-                continue
-            t_out = _ts(p["date"]) - t0
-            dur   = p.get("lane_duration") or p.get("pit_duration") or 25.0
-            pits.append([round(t_out - float(dur), 2), round(t_out, 2)])
+        pits = pit_windows(pit_stops, num, t0)
         if not pits:
             # Some sessions have no pit records (e.g. 2023 Monaco): at each tyre
             # change, take the longest stretch the car spends > 8 m off the

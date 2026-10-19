@@ -1,0 +1,77 @@
+name: Refresh race data
+
+# Weekly: pull new races from OpenF1 into ml/laps_train.csv, then deploy so
+# the Space retrains its strategy model on them during the Docker build.
+on:
+  schedule:
+    - cron: "0 6 * * 2"    # Tuesdays 06:00 UTC, after race weekends
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: refresh-data
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+
+      # Raw OpenF1 responses from earlier runs, so only new races are downloaded
+      - uses: actions/cache@v4
+        with:
+          path: ml/data/raw
+          key: openf1-raw-${{ github.run_id }}
+          restore-keys: openf1-raw-
+
+      - name: Rebuild the lap dataset
+        run: python ml/build_dataset.py
+
+      - name: Check the new data
+        id: check
+        run: |
+          count() { python -c "import pandas as pd, sys; print(pd.read_csv(sys.argv[1]).session_key.nunique())" "$1"; }
+          git show HEAD:ml/laps_train.csv > /tmp/old_laps.csv
+          old=$(count /tmp/old_laps.csv); new=$(count ml/laps_train.csv)
+          size=$(stat -c%s ml/laps_train.csv)
+          echo "races: $old -> $new; laps_train.csv: $size bytes"
+          # An OpenF1 outage must never shrink the dataset
+          if [ "$new" -lt "$old" ]; then echo "::error::fewer races than before ($new < $old)"; exit 1; fi
+          # Hugging Face rejects text files over 10 MB unless they use its large-file storage
+          if [ "$size" -ge 10000000 ]; then echo "::error::ml/laps_train.csv is over 10 MB"; exit 1; fi
+          echo "new_races=$((new - old))" >> "$GITHUB_OUTPUT"
+          echo "races=$new" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        if: steps.check.outputs.new_races != '0'
+        run: pytest -q
+
+      - name: Commit and push the new races
+        if: steps.check.outputs.new_races != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ml/laps_train.csv
+          git commit -m "Refresh race data: ${{ steps.check.outputs.new_races }} new, ${{ steps.check.outputs.races }} races"
+          git push origin HEAD:master
+
+      # A push made with GITHUB_TOKEN does not start other workflows, so deploy here
+      - name: Deploy to the Hugging Face Space
+        if: steps.check.outputs.new_races != '0'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::warning::HF_TOKEN secret is not set, so the Space was not updated"
+            exit 0
+          fi
+          git push "https://Arry7868:${HF_TOKEN}@huggingface.co/spaces/Arry7868/F1-Simulator-for-ML-Simulations" HEAD:main
