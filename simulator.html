@@ -645,6 +645,7 @@ body {
 #play-btn:hover { background: rgba(255,255,255,0.13); color: white; }
 
 #scrubber {
+  touch-action: none;
   flex: 1;
   height: 2px;
   background: rgba(255,255,255,0.07);
@@ -689,6 +690,68 @@ body {
   background: rgba(255,255,255,0.1);
   color: white;
   border-color: rgba(255,255,255,0.18);
+}
+/* Bigger grab area for the 2 px timeline, and no browser panning/zooming on
+   the track canvas (pinch zooms the camera instead) */
+#scrubber::before { content: ''; position: absolute; inset: -12px 0; }
+#canvas { touch-action: none; }
+
+.wi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wi-close { cursor: pointer; color: rgba(255,255,255,0.4); font-size: 13px; padding: 0 4px; }
+.wi-close:hover { color: #fff; }
+
+/* Standings expand/collapse toggle (narrow screens only) */
+#st-toggle {
+  display: none;
+  position: absolute; right: 8px; top: 52px;
+  padding: 4px 10px; border-radius: 12px;
+  background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.12);
+  font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(255,255,255,0.55); cursor: pointer; pointer-events: all;
+}
+
+/* ── Phones (portrait or landscape) and narrow windows ───────────────── */
+@media (max-width: 760px), (max-height: 500px) {
+  #header { top: 12px; max-width: 56vw; }
+  #race-title { font-size: 7px; letter-spacing: 2px; line-height: 1.6; }
+  #timer { font-size: 20px; }
+  #fl-badge, #minimap, #tyre-legend { display: none !important; }
+  #follow-badge { top: 12px; left: 12px; }
+  #help-btn { top: 12px; right: 12px; }
+  #sc-banner { top: 74px; }
+
+  /* Standings collapse to position + name; the toggle expands every column */
+  #st-toggle { display: block; }
+  #standings { right: 8px; top: 80px; bottom: 132px; }
+  #standings:not(.expanded) .drv-row { min-width: 0; padding: 3px 7px 3px 5px; gap: 5px; }
+  #standings:not(.expanded) .drv-lap,
+  #standings:not(.expanded) .cmp-dot,
+  #standings:not(.expanded) .strat-strip { display: none; }
+  #standings:not(.expanded) .drv-name { font-size: 10px; letter-spacing: 1px; }
+  #standings:not(.expanded) .pit-tag:not(.on) { display: none; }
+  #standings.expanded {
+    left: 8px; padding: 6px; border-radius: 10px; z-index: 40;
+    background: rgba(4,4,10,0.92); backdrop-filter: blur(10px);
+  }
+
+  /* Bottom: toolbar row, then timeline + speeds above it */
+  #tool-btns { bottom: 10px; left: 12px; right: 12px; overflow-x: auto; }
+  #races-btn, #strat-btn, #radio-btn, #whatif-btn { flex: 1 0 auto; text-align: center; padding: 7px 10px; }
+  #controls { bottom: 50px; left: 12px; right: 12px; transform: none; }
+  #timeline-bar { width: 100%; max-width: none; }
+  .spd { padding: 4px 12px; }
+  #ot-log { bottom: 128px; }
+  #ot-log .ot-entry:nth-child(n+3) { display: none; }
+
+  /* What-if becomes a bottom sheet */
+  #whatif {
+    top: auto; left: 0; right: 0; bottom: 0;
+    width: auto; max-width: none; max-height: 64vh;
+    border-radius: 14px 14px 0 0; z-index: 60;
+  }
+
+  #menu-card { width: calc(100vw - 32px); padding: 30px 20px 24px; gap: 14px; }
+  #help-card { padding: 22px 18px; gap: 20px; }
 }
 </style>
 </head>
@@ -771,6 +834,7 @@ body {
   <div id="standings"></div>
 
   <div id="ot-log"></div>
+  <div id="st-toggle" role="button">Standings ▸</div>
   <div id="minimap"><canvas id="minimap-canvas" width="160" height="120"></canvas></div>
 
   <div id="tyre-legend">
@@ -1455,7 +1519,11 @@ function openWhatif() {
   title.append('What if · ');
   const b = document.createElement('b'); b.textContent = drv.name;
   title.append(b, ` · from the end of lap ${L}`);
-  wiPanel.replaceChildren(title);
+  const head = document.createElement('div'); head.className = 'wi-head';
+  const close = document.createElement('span'); close.className = 'wi-close'; close.textContent = '\u2715';
+  close.title = 'Close'; close.addEventListener('click', closeWhatif);
+  head.append(title, close);
+  wiPanel.replaceChildren(head);
   if (L < 3 || L >= N - 2) {
     wiPanel.append(note(`Pick a moment between lap 3 and lap ${N - 3}.`));
   } else {
@@ -1943,20 +2011,49 @@ canvas.addEventListener('click', e => {
   }
 });
 
-canvas.addEventListener('wheel',e=>{
-  if(!raceData) return;
-  e.preventDefault();
-  const zd=e.deltaY<0?1.15:1/1.15;
+function zoomAt(sx, sy, zd) {
   if(cam.follow){
     cam.followZoom=Math.max(1.5,Math.min(20,cam.followZoom*zd));
   } else {
-    const wx=(e.clientX-W*0.5)/cam.tz+cam.tx;
-    const wy=-(e.clientY-H*0.5)/cam.tz+cam.ty;
+    const wx=(sx-W*0.5)/cam.tz+cam.tx;
+    const wy=-(sy-H*0.5)/cam.tz+cam.ty;
     cam.tz=Math.max(cam.baseZoom*0.35,Math.min(cam.baseZoom*28,cam.tz*zd));
-    cam.tx=wx-(e.clientX-W*0.5)/cam.tz;
-    cam.ty=wy+(e.clientY-H*0.5)/cam.tz;
+    cam.tx=wx-(sx-W*0.5)/cam.tz;
+    cam.ty=wy+(sy-H*0.5)/cam.tz;
   }
+}
+
+canvas.addEventListener('wheel',e=>{
+  if(!raceData) return;
+  e.preventDefault();
+  zoomAt(e.clientX, e.clientY, e.deltaY<0?1.15:1/1.15);
 },{passive:false});
+
+// Two-finger pinch zooms around the midpoint between the fingers
+const touches = new Map();
+let pinchDist = 0;
+const pinchSpan = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+canvas.addEventListener('pointerdown', e => {
+  touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (touches.size === 2) pinchDist = pinchSpan();
+});
+canvas.addEventListener('pointermove', e => {
+  if (!touches.has(e.pointerId)) return;
+  touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (touches.size === 2 && raceData && pinchDist > 0) {
+    const d = pinchSpan(), [a, b] = [...touches.values()];
+    zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d / pinchDist);
+    pinchDist = d;
+  }
+});
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave'])
+  canvas.addEventListener(ev, e => { touches.delete(e.pointerId); if (touches.size < 2) pinchDist = 0; });
+
+// Narrow screens: tap to expand the collapsed standings columns
+document.getElementById('st-toggle').addEventListener('click', () => {
+  const on = document.getElementById('standings').classList.toggle('expanded');
+  document.getElementById('st-toggle').textContent = on ? 'Standings \u25C2' : 'Standings \u25B8';
+});
 
 // ── End-of-race Summary ───────────────────────────────────────────────────────
 function showSummary() {
@@ -2067,9 +2164,14 @@ function doScrub(e){
   simTime=raceData.t_start+p*(raceData.t_end-raceData.t_start);
   resetOvertakes(); resetRadio();
 }
-scrubber.addEventListener('mousedown',e=>{scrubbing=true;doScrub(e);});
-window.addEventListener('mousemove',e=>{if(scrubbing)doScrub(e);});
-window.addEventListener('mouseup',()=>{scrubbing=false;});
+scrubber.addEventListener('pointerdown',e=>{
+  scrubbing=true;
+  try { scrubber.setPointerCapture(e.pointerId); } catch (err) { /* window listeners still track the drag */ }
+  doScrub(e);
+});
+window.addEventListener('pointermove',e=>{if(scrubbing)doScrub(e);});
+window.addEventListener('pointerup',()=>{scrubbing=false;});
+window.addEventListener('pointercancel',()=>{scrubbing=false;});
 
 // ── Data Init ─────────────────────────────────────────────────────────────────
 function initData(d) {
