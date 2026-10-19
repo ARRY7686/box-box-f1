@@ -3,7 +3,7 @@
 **Replay any Formula 1 session from 2023 onwards in your browser, with every car on track, live standings, the real team radio, and a machine-learning pit-stop what-if.**
 
 [![Live demo](https://img.shields.io/badge/demo-Hugging%20Face%20Space-yellow?style=flat-square)](https://huggingface.co/spaces/Arry7868/F1-Simulator-for-ML-Simulations)
-[![CI](https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models/actions/workflows/ci.yml/badge.svg)](https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models/actions/workflows/ci.yml)
+[![CI](https://github.com/ARRY7686/box-box-f1/actions/workflows/ci.yml/badge.svg)](https://github.com/ARRY7686/box-box-f1/actions/workflows/ci.yml)
 ![Data](https://img.shields.io/badge/data-OpenF1-red?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.12-blue?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
@@ -11,9 +11,9 @@
 Pick a year, a Grand Prix and a session. The server downloads the official car positions, lap times, tyre stints, pit stops, race-control messages and team radio from the [OpenF1 API](https://openf1.org), then the browser replays the whole session on an HTML5 canvas.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models/assets/demo.gif" width="100%" alt="Demo: replaying the 2024 São Paulo GP, VER's team radio, switching races, and the pit-stop what-if with a ghost car">
+  <img src="https://raw.githubusercontent.com/ARRY7686/box-box-f1/assets/demo.gif" width="100%" alt="Demo: replaying the 2024 São Paulo GP, VER's team radio, switching races, and the pit-stop what-if with a ghost car">
   <br>
-  <sub>41-second demo · <a href="https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models/raw/assets/demo.mp4">watch in HD (MP4)</a> · <a href="https://huggingface.co/spaces/Arry7868/F1-Simulator-for-ML-Simulations">try it live</a></sub>
+  <sub>43-second demo · <a href="https://github.com/ARRY7686/box-box-f1/raw/assets/demo.mp4">watch in HD (MP4)</a> · <a href="https://huggingface.co/spaces/Arry7868/F1-Simulator-for-ML-Simulations">try it live</a></sub>
 </p>
 
 ---
@@ -64,8 +64,8 @@ Click a car or a standings row to follow that driver. Drag the timeline to jump 
 Requires Python 3.12+.
 
 ```bash
-git clone https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models.git
-cd F1-Simulator-for-simulations-on-ML-models
+git clone https://github.com/ARRY7686/box-box-f1.git
+cd box-box-f1
 
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
@@ -199,4 +199,4 @@ If you enjoyed it, a ⭐ on this repo helps other F1 and data fans find it.
 
 ## License
 
-MIT, see [LICENSE](https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models/blob/master/LICENSE).
+MIT, see [LICENSE](https://github.com/ARRY7686/box-box-f1/blob/master/LICENSE).

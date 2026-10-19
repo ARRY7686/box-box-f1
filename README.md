@@ -12,6 +12,6 @@ pinned: false
 
 Replay any Formula 1 session from 2023 onwards in your browser, with every car on track, live standings, tyre strategy and the real team radio. Data comes from the [OpenF1 API](https://openf1.org).
 
-Full documentation, controls and source: **[github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models](https://github.com/ARRY7686/F1-Simulator-for-simulations-on-ML-models)**
+Full documentation, controls and source: **[github.com/ARRY7686/box-box-f1](https://github.com/ARRY7686/box-box-f1)**
 
 If you enjoyed it, a ⭐ on the GitHub repo helps other people find it.
