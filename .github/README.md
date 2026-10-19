@@ -13,7 +13,7 @@ Pick a year, a Grand Prix and a session. The server downloads the official car p
 <p align="center">
   <img src="https://raw.githubusercontent.com/ARRY7686/box-box-f1/assets/demo.gif" width="100%" alt="Demo: replaying the 2024 São Paulo GP, VER's team radio, switching races, and the pit-stop what-if with a ghost car">
   <br>
-  <sub>43-second demo · <a href="https://github.com/ARRY7686/box-box-f1/raw/assets/demo.mp4">watch in HD (MP4)</a> · <a href="https://huggingface.co/spaces/Arry7868/F1-Simulator-for-ML-Simulations">try it live</a></sub>
+  <sub>43-second demo · <a href="https://github.com/ARRY7686/box-box-f1/raw/assets/demo.mp4">watch in HD (MP4)</a> · <a href="https://arry7868-f1-simulator-for-ml-simulations.hf.space/simulator.html">try it live</a></sub>
 </p>
 
 ---
