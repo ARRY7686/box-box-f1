@@ -1,4 +1,4 @@
-# 🏎️ F1 Race Simulator
+#  F1 Race Simulator
 
 **Replay any Formula 1 session from 2023 onwards in your browser, with every car on track, live standings, the real team radio, and a machine-learning pit-stop what-if.**
 
@@ -17,7 +17,7 @@ Pick a year, a Grand Prix and a session. The server downloads the official car p
 
 ---
 
-## ✨ Highlights
+##  Highlights
 
 - **Pit-stop what-if.** Follow a driver, press `W`, and ask "what if they'd pitted at the end of lap 15 for hards?". A model trained on every race since 2023 projects the gaps to nearby rivals 10 laps later, gives a calibrated chance of being ahead of each one, shows what really happened, and lets you watch a ghost car drive the alternative strategy.
 - **Every car, every second.** All cars move around the real circuit outline, driven by official position data.
@@ -40,7 +40,7 @@ Pick a year, a Grand Prix and a session. The server downloads the official car p
 
 ---
 
-## 🎮 Controls
+##  Controls
 
 | Key | Action |
 |---|---|
@@ -58,7 +58,7 @@ Click a car or a standings row to follow that driver. Drag the timeline to jump 
 
 ---
 
-## 🚀 Run it locally
+##  Run it locally
 
 Requires Python 3.12+.
 
@@ -85,7 +85,7 @@ docker run -p 7860:7860 f1-sim
 
 ---
 
-## ⚙️ How it works
+##  How it works
 
 1. **Fetch.** `fetch_data.py` pulls a session from OpenF1: about 4 position samples per second per car, plus laps, stints, pit stops, race control and team radio (roughly 90 MB for a race).
 2. **Process.**
@@ -99,7 +99,7 @@ These steps were checked against real results: the replay reproduces the officia
 
 ---
 
-## 🧠 Pit-stop what-if: how it works and how well
+##  Pit-stop what-if: how it works and how well
 
 **The model.** `ml/train_lap_model.py` trains a gradient-boosted model on every green-flag race lap since 2023 (~82,000 laps, built by `ml/build_dataset.py`). Standing at lap L, it predicts a driver's lap time up to 30 laps ahead from their recent pace, tyre compound and age, fuel load, circuit, track temperature and rain.
 
@@ -128,7 +128,7 @@ python ml/train_production.py      # the app's model (the Docker build runs this
 
 ---
 
-## 📁 Project structure
+##  Project structure
 
 ```
 ├── serve.py            # HTTP server: race API, gzip, static files
@@ -152,7 +152,7 @@ python ml/train_production.py      # the app's model (the Docker build runs this
 
 ---
 
-## ☁️ Deployment
+##  Deployment
 
 **Hugging Face Spaces.** The YAML header in the root `README.md` configures a Docker Space on port 7860 (GitHub shows this page, `.github/README.md`, instead). Push the repo to the Space and it builds automatically.
 
@@ -160,7 +160,7 @@ python ml/train_production.py      # the app's model (the Docker build runs this
 
 ---
 
-## 📡 Data and limitations
+##  Data and limitations
 
 - All data comes from the free [OpenF1 API](https://openf1.org), which starts at the 2023 season. Team radio clips stream from F1's own servers.
 - The project originally used [FastF1](https://github.com/theOehrly/Fast-F1), but the F1 live-timing archive it reads (`livetiming.formula1.com/static`) now rejects requests with `401 Unauthorized`.
